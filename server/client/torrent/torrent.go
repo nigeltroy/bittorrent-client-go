@@ -1,6 +1,8 @@
 package torrent
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"io"
 	"strings"
 	"time"
@@ -37,6 +39,7 @@ type Metainfo struct {
 	CreationDate     string
 	HasMultipleFiles bool
 	Info             interface{}
+	InfoHash         string
 }
 
 func unixTimeInterfaceToUtcString(i interface{}) string {
@@ -45,26 +48,51 @@ func unixTimeInterfaceToUtcString(i interface{}) string {
 	return utcTime
 }
 
-func hasMultipleFiles(d map[string]interface{}) bool {
-	_, ok := d["info"].(map[string]interface{})["files"]
+func hasMultipleFiles(torrentDict map[string]interface{}) bool {
+	_, ok := torrentDict["info"].(map[string]interface{})["files"]
 
 	return ok
 }
 
-func getAnnounceList(i []interface{}) []string {
-	announceList := make([]string, 0)
+func getAnnounceList(torrentDict map[string]interface{}) []string {
+	if torrentDict["interface"] != nil {
+		announceListInterface := torrentDict["announce-list"].([]interface{})
+		announceList := make([]string, 0)
 
-	for _, urls := range i {
-		url := urls.([]interface{})[0]
-		announceList = append(announceList, url.(string))
+		for _, urls := range announceListInterface {
+			url := urls.([]interface{})[0]
+			announceList = append(announceList, url.(string))
+		}
+
+		return announceList
 	}
 
-	return announceList
+	return nil
 }
 
-func getPieces(i interface{}) [][]byte {
+func getComment(torrentDict map[string]interface{}) string {
+	commentInterface := torrentDict["comment"]
+
+	if commentInterface != nil {
+		return commentInterface.(string)
+	}
+
+	return ""
+}
+
+func getCreatedBy(torrentDict map[string]interface{}) string {
+	createdByInterface := torrentDict["created by"]
+
+	if createdByInterface != nil {
+		return createdByInterface.(string)
+	}
+
+	return ""
+}
+
+func getPieces(piecesInterface interface{}) [][]byte {
 	pieces := make([][]byte, 0)
-	piecesBytes := []byte(i.(string))
+	piecesBytes := []byte(piecesInterface.(string))
 	hashLength := 20
 
 	for i := 0; i < len(piecesBytes); i += hashLength {
@@ -74,10 +102,10 @@ func getPieces(i interface{}) [][]byte {
 	return pieces
 }
 
-func getFiles(i []interface{}) []File {
+func getFiles(filesInterface []interface{}) []File {
 	files := make([]File, 0)
 
-	for _, fileInterface := range i {
+	for _, fileInterface := range filesInterface {
 		fileDict := fileInterface.(map[string]interface{})
 		pathInterface := fileDict["path"].([]interface{})
 		pathParts := make([]string, 0)
@@ -97,35 +125,46 @@ func getFiles(i []interface{}) []File {
 	return files
 }
 
-func dictToMetainfo(d map[string]interface{}) Metainfo {
-	metainfo := Metainfo{
-		Announce:         d["announce"].(string),
-		AnnounceList:     getAnnounceList(d["announce-list"].([]interface{})),
-		Comment:          d["comment"].(string),
-		CreatedBy:        d["created by"].(string),
-		CreationDate:     unixTimeInterfaceToUtcString(d["creation date"]),
-		HasMultipleFiles: hasMultipleFiles(d),
-	}
+func getInfoHash(infoDictInterface map[string]interface{}) string {
+	encodedInfoDict := bencode.Encode(infoDictInterface)
+	encryptedInfoDict := sha1.Sum(encodedInfoDict)
+	infohash := hex.EncodeToString(encryptedInfoDict[:])
 
-	infoDictInterface := d["info"].(map[string]interface{})
+	return infohash
+}
 
+func getInfoDict(infoDictInterface map[string]interface{}, hasMultipleFiles bool) interface{} {
 	baseInfoDict := BaseInfoDict{
 		Name:        infoDictInterface["name"].(string),
 		Pieces:      getPieces(infoDictInterface["pieces"]),
 		PieceLength: infoDictInterface["piece length"].(int64),
 	}
 
-	if !hasMultipleFiles(d) {
-		metainfo.Info = InfoDictSingleFile{
+	if !hasMultipleFiles {
+		return InfoDictSingleFile{
 			Base:   baseInfoDict,
 			Length: infoDictInterface["length"].(int64),
 		}
-	} else {
-		metainfo.Info = InfoDictMultipleFiles{
-			Base:  baseInfoDict,
-			Files: getFiles(infoDictInterface["files"].([]interface{})),
-		}
 	}
+
+	return InfoDictMultipleFiles{
+		Base:  baseInfoDict,
+		Files: getFiles(infoDictInterface["files"].([]interface{})),
+	}
+}
+
+func dictToMetainfo(torrentDict map[string]interface{}) Metainfo {
+	metainfo := Metainfo{
+		Announce:         torrentDict["announce"].(string),
+		AnnounceList:     getAnnounceList(torrentDict),
+		Comment:          getComment(torrentDict),
+		CreatedBy:        getCreatedBy(torrentDict),
+		CreationDate:     unixTimeInterfaceToUtcString(torrentDict["creation date"]),
+		HasMultipleFiles: hasMultipleFiles(torrentDict),
+		InfoHash:         getInfoHash(torrentDict["info"].(map[string]interface{})),
+	}
+
+	metainfo.Info = getInfoDict(torrentDict["info"].(map[string]interface{}), hasMultipleFiles(torrentDict))
 
 	return metainfo
 }
