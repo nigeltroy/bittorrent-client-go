@@ -55,7 +55,7 @@ func hasMultipleFiles(torrentDict map[string]interface{}) bool {
 }
 
 func getAnnounceList(torrentDict map[string]interface{}) []string {
-	if torrentDict["interface"] != nil {
+	if torrentDict["announce-list"] != nil {
 		announceListInterface := torrentDict["announce-list"].([]interface{})
 		announceList := make([]string, 0)
 
