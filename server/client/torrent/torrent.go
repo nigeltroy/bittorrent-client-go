@@ -128,9 +128,9 @@ func getFiles(filesInterface []interface{}) []File {
 func getInfoHash(infoDictInterface map[string]interface{}) string {
 	encodedInfoDict := bencode.Encode(infoDictInterface)
 	encryptedInfoDict := sha1.Sum(encodedInfoDict)
-	infohash := hex.EncodeToString(encryptedInfoDict[:])
+	infoHash := hex.EncodeToString(encryptedInfoDict[:])
 
-	return infohash
+	return infoHash
 }
 
 func getInfoDict(infoDictInterface map[string]interface{}, hasMultipleFiles bool) interface{} {
