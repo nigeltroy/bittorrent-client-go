@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"time"
 )
 
 const logFileName string = "logs.txt"
@@ -17,5 +16,5 @@ func main() {
 
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.Printf("New program run at: %s\n\n", time.Now().String())
+	log.Printf("\nNew program run\n\n")
 }
