@@ -1,11 +1,10 @@
-package torrent
+package client
 
 import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"strings"
@@ -58,6 +57,10 @@ func (info info) GetLength() (int64, error) {
 	}
 
 	return info.length, nil
+}
+
+func (info info) GetName() string {
+	return info.name
 }
 
 func extractAnnounceFromDecodedStream(decodedStream map[string]interface{}) (string, error) {
@@ -312,22 +315,4 @@ func extractMetainfoFromDecodedStream(decodedStream map[string]interface{}) (*me
 		info:         *info,
 		infoHash:     infoHash,
 	}, nil
-}
-
-func createMetainfoFromFileContents(reader io.Reader) (*metainfo, error) {
-	decodedStream, err := bencode.Decode(reader)
-
-	if err != nil {
-		return nil, err
-	}
-
-	metainfo, err := extractMetainfoFromDecodedStream(decodedStream)
-
-	if err != nil {
-		return nil, err
-	}
-
-	log.Println("Successfully created metainfo from file contents.")
-
-	return metainfo, nil
 }
