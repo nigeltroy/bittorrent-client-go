@@ -13,6 +13,7 @@ type state int
 const (
 	started state = iota
 	stopped
+	completed
 )
 
 type torrent struct {
@@ -40,6 +41,27 @@ func (t *torrent) setMetainfo(r io.Reader) error {
 }
 
 func (t *torrent) setTracker() error {
+	request, err := t.createRequest(
+		t.metainfo.announce,
+		t.metainfo.infoHash.urlEncodedString,
+		0,
+		0,
+		t.metainfo.info.length,
+	)
+	if err != nil {
+		return err
+	}
+
+	response, err := request.getTrackerResponse()
+	if err != nil {
+		return err
+	}
+
+	t.tracker = tracker{
+		request:  *request,
+		response: *response,
+	}
+
 	return nil
 }
 

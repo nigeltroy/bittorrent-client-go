@@ -47,12 +47,12 @@ Information on the following fields can be found in the [BitTorrent protocol spe
 #### Trackers
 
 ##### Request
-- [ ] info_hash
-- [ ] peer_id
+- [x] info_hash
+- [x] peer_id
 - [ ] port
-- [ ] uploaded
-- [ ] downloaded
-- [ ] left
+- [x] uploaded
+- [x] downloaded
+- [x] left
 - [ ] compact
 - [ ] no_peer_id
 - [ ] event
@@ -62,18 +62,18 @@ Information on the following fields can be found in the [BitTorrent protocol spe
 - [ ] trackerid
 
 ##### Response
-- [ ] failure reason
+- [x] failure reason
 - [ ] warning message
-- [ ] interval
+- [x] interval
 - [ ] min interval
 - [ ] tracker id
 - [ ] complete
 - [ ] incomplete
-- [ ] peers
-    - [ ] Dictionary model
-        - [ ] peer id
-        - [ ] ip
-        - [ ] port
+- [x] peers
+    - [x] Dictionary model
+        - [x] peer id
+        - [x] ip
+        - [x] port
     - [ ] Binary model
 
 #### Peers

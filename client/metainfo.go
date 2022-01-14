@@ -17,11 +17,13 @@ type metadata struct {
 	comment      string
 	createdBy    string
 	creationDate string
+	// encoding
 }
 
 type file struct {
 	length int64
 	path   string
+	// md5sum (multiple file mode)
 }
 
 type info struct {
@@ -31,6 +33,8 @@ type info struct {
 	pieces           [][]byte
 	length           int64  // single file mode
 	files            []file // multiple file mode
+	// private
+	// md5sum (single file mode)
 }
 
 type infoHash struct {
