@@ -23,7 +23,7 @@ func main() {
 
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.Printf("\nNew program run\n\n")
+	log.Printf("\n\nNew program run\n")
 
 	var exited bool
 	var input, command string
