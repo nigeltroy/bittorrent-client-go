@@ -43,8 +43,11 @@ Information on the following fields can be found in the [BitTorrent protocol spe
 - [x] comment
 - [x] created by
 - [ ] encoding
+- [ ] url-list ??? - I found this while trying to debug the Arch torrent, but it isn't documented in the BitTorrent spec
 
 #### Trackers
+- [x] TCP announce
+- [ ] UDP announce
 
 ##### Request
 - [x] info_hash
