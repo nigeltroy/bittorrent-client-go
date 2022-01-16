@@ -1,7 +1,9 @@
 # bittorrent-client-go
 A simple BitTorrent client in Go.
 
-Motivation: I wanted to learn Go and async programming!
+## Motivation
+I wanted to learn Go and async programming!
+An actual fully-featured BitTorrent client is a huge undertaking (see FOSS project [qBittorrent](https://github.com/qbittorrent/qBittorrent)), so this only aims to be an extremely simplified version of one.
 
 ## Project progress
 
@@ -17,7 +19,6 @@ Motivation: I wanted to learn Go and async programming!
     - [ ] Tracker
     - [ ] Peers
     - [ ] Client
-- [ ] HTTP API
 
 ### BitTorrent protocol spec fields
 Information on the following fields can be found in the [BitTorrent protocol spec (or a spec change request)](https://www.bittorrent.org/beps/bep_0003.html) or in the spec in the [BitTorrent Wiki](https://wiki.theory.org/BitTorrentSpecification). A simplified version of this program only needs to support some non-optional fields.
