@@ -122,8 +122,13 @@ func (r *request) getTrackerResponse() (*response, error) {
 
 	interval := decodedResp["interval"].(int64)
 
+	peersInterface, peersIsArray := decodedResp["peers"].([]interface{})
+	if !peersIsArray {
+		return nil, errors.New("cannot process binary model peers")
+	}
+
 	peers := make([]peerDict, 0)
-	for _, p := range decodedResp["peers"].([]interface{}) {
+	for _, p := range peersInterface {
 		peerInterface := p.(map[string]interface{})
 		peerId, _ := peerInterface["peer id"].(string)
 		peer := peerDict{
@@ -159,7 +164,7 @@ func (t *torrent) tryToAnnounce() (*tracker, error) {
 				return nil, err
 			}
 
-			response, _ = request.getTrackerResponse()
+			response, err = request.getTrackerResponse()
 			if response != nil {
 				couldAnnounce = true
 				break
@@ -175,5 +180,5 @@ func (t *torrent) tryToAnnounce() (*tracker, error) {
 			response: *response,
 		}, nil
 	}
-	return nil, errors.New("could not announce to any announce URL")
+	return nil, err
 }
