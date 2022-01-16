@@ -49,6 +49,7 @@ Information on the following fields can be found in the [BitTorrent protocol spe
 #### Trackers
 - [x] TCP announce
 - [ ] UDP announce
+- [ ] DHT announce
 - [ ] Async announcing
 
 ##### Request
