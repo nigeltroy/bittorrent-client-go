@@ -141,7 +141,7 @@ func (r *request) getTrackerResponse() (*response, error) {
 }
 
 func (t *torrent) tryToAnnounce() (*tracker, error) {
-	// Need to clean this function up
+	// Need to clean this function up. Make this async too!
 	var couldAnnounce bool
 
 	// Try announcing to the main announce URL first
