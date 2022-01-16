@@ -41,27 +41,12 @@ func (t *torrent) setMetainfo(r io.Reader) error {
 }
 
 func (t *torrent) setTracker() error {
-	request, err := t.createRequest(
-		t.metainfo.announce,
-		t.metainfo.infoHash.urlEncodedString,
-		0,
-		0,
-		t.metainfo.info.length,
-	)
+	tracker, err := t.tryToAnnounce()
 	if err != nil {
 		return err
 	}
 
-	response, err := request.getTrackerResponse()
-	if err != nil {
-		return err
-	}
-
-	t.tracker = tracker{
-		request:  *request,
-		response: *response,
-	}
-
+	t.tracker = *tracker
 	return nil
 }
 
