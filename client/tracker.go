@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/marksamman/bencode"
@@ -16,6 +17,11 @@ import (
 type tracker struct {
 	interval int64
 	url      string
+}
+
+type safePeers struct {
+	mu    sync.Mutex
+	peers map[peer]bool
 }
 
 func tryToAnnounce(url string, t *torrent) ([]peer, error) {
@@ -81,8 +87,10 @@ func (t *torrent) requestPeers() error {
 		announceUrls = append(announceUrls, url...)
 	}
 
-	allPeers := make([]peer, 0)
+	safePeers := safePeers{peers: make(map[peer]bool)}
+	var wg sync.WaitGroup
 	for _, u := range announceUrls {
+		wg.Add(1)
 		requestUrl := fmt.Sprintf(
 			"%s?info_hash=%s&peer_id=%s&uploaded=%d&downloaded=%d&left=%d",
 			u,
@@ -92,17 +100,34 @@ func (t *torrent) requestPeers() error {
 			0,
 			t.metainfo.Info.Length,
 		)
-		peers, err := tryToAnnounce(requestUrl, t)
-		if err != nil {
-			// Since we just continue here, log the error
-			log.Println(err)
-			continue
-		}
-		allPeers = append(allPeers, peers...)
+
+		// Asynchronously GET peers from all announce URLs
+		go func() {
+			defer wg.Done()
+			peers, err := tryToAnnounce(requestUrl, t)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+
+			// Wrap peer writing with mutex lock/unlock so that only one
+			// goroutine can access it at a time
+			// This also filters out duplicate peers
+			safePeers.mu.Lock()
+			for _, p := range peers {
+				if _, peerExists := safePeers.peers[p]; !peerExists {
+					safePeers.peers[p] = true
+					t.peers = append(t.peers, p)
+				}
+			}
+			safePeers.mu.Unlock()
+		}()
 	}
 
-	if len(allPeers) == 0 {
+	wg.Wait()
+	if len(safePeers.peers) == 0 {
 		return errors.New("no peers found after announcing to all urls")
 	}
+
 	return nil
 }
