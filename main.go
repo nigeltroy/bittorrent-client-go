@@ -26,7 +26,21 @@ func printHelp() {
 	fmt.Println("exit: exits program")
 	fmt.Println("print: prints all torrents")
 	fmt.Println("add <file path>: adds torrent from <file path>")
-	fmt.Println("remove <prefix>: removes first torrent that starts with <prefix>")
+	fmt.Println("remove <prefix>: removes first torrent with prefix <prefix>")
+	fmt.Println("start <prefix>: starts downloading the torrent with prefix <prefix>")
+	fmt.Println("stop <prefix>: stops downloading the torrent with prefix <prefix>")
+}
+
+func runClientCrudCommand(input []string, f func(string) error) {
+	if len(input) != 2 {
+		fmt.Println("not enough input arguments")
+		return
+	}
+
+	err := f(input[1])
+	if err != nil {
+		fmt.Println(err)
+	}
 }
 
 func runClient() {
@@ -35,9 +49,8 @@ func runClient() {
 	fmt.Println()
 
 	scanner := bufio.NewScanner(os.Stdin)
-	torrentClient := client.Client{}
-	exited := false
-	for !exited {
+	torrentClient := client.New()
+	for {
 		scanner.Scan()
 		input := strings.Fields(scanner.Text())
 		if len(input) == 0 {
@@ -47,31 +60,15 @@ func runClient() {
 		cmd := input[0]
 		switch cmd {
 		case "exit":
-			exited = true
+			os.Exit(0)
 		case "help":
 			printHelp()
 		case "print":
 			torrentClient.ShowTorrents()
 		case "add":
-			if len(input) != 2 {
-				fmt.Print("not enough input arguments")
-				continue
-			}
-
-			err := torrentClient.AddTorrent(input[1])
-			if err != nil {
-				fmt.Println(err)
-			}
+			runClientCrudCommand(input, torrentClient.AddTorrent)
 		case "remove":
-			if len(input) != 2 {
-				fmt.Print("not enough input arguments")
-				continue
-			}
-
-			err := torrentClient.RemoveTorrent(input[1])
-			if err != nil {
-				fmt.Println(err)
-			}
+			runClientCrudCommand(input, torrentClient.RemoveTorrent)
 		}
 
 		fmt.Println()

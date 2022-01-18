@@ -11,7 +11,11 @@ import (
 )
 
 type Client struct {
-	Torrents []torrent
+	Torrents map[string]torrent
+}
+
+func New() Client {
+	return Client{Torrents: make(map[string]torrent)}
 }
 
 func (c *Client) AddTorrent(input string) error {
@@ -19,26 +23,25 @@ func (c *Client) AddTorrent(input string) error {
 	if err != nil {
 		return err
 	}
+	newName := torrent.metainfo.Info.Name
 
 	// Later, to make this more efficient, do the following check immediately
 	// after setting the metainfo
-	for _, t := range c.Torrents {
-		name := t.metainfo.Info.Name
-		if name == torrent.metainfo.Info.Name {
+	for name := range c.Torrents {
+		if name == newName {
 			return fmt.Errorf("torrent %s already exists", name)
 		}
 	}
 
-	c.Torrents = append(c.Torrents, *torrent)
+	c.Torrents[newName] = *torrent
 	return nil
 }
 
 func (c *Client) RemoveTorrent(prefix string) error {
-	for i, t := range c.Torrents {
-		name := t.metainfo.Info.Name
+	for name := range c.Torrents {
 		if strings.HasPrefix(name, prefix) {
 			fmt.Printf("Removed torrent %s\n", name)
-			c.Torrents = append(c.Torrents[:i], c.Torrents[i+1:]...)
+			delete(c.Torrents, name)
 			return nil
 		}
 	}
@@ -47,7 +50,7 @@ func (c *Client) RemoveTorrent(prefix string) error {
 }
 
 func (c Client) ShowTorrents() {
-	for i, t := range c.Torrents {
-		fmt.Printf("%d. %s\n", i+1, t.metainfo.Info.Name)
+	for name := range c.Torrents {
+		fmt.Printf("%s\n", name)
 	}
 }
