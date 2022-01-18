@@ -2,98 +2,85 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/nigeltroy/bittorrent-client-go/client"
 )
 
-const logFileName string = "logs.txt"
+func initializeLogger() *os.File {
+	const logFileName string = "logs.txt"
 
-func main() {
-	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
-
+	f, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.Printf("\n\nNew program run\n")
+	log.SetOutput(f)
+	return f
+}
 
-	var exited bool
-	var input, command string
-	var inputArgs []string
-	var torrentClient client.Client
+func printHelp() {
+	fmt.Println("exit: exits program")
+	fmt.Println("print: prints all torrents")
+	fmt.Println("add <file path>: adds torrent from <file path>")
+	fmt.Println("remove <prefix>: removes first torrent that starts with <prefix>")
+}
+
+func runClient() {
+	log.Println("Program bittorrent-client-go has started...")
+	fmt.Println("Type 'help' for valid commands")
+	fmt.Println()
 
 	scanner := bufio.NewScanner(os.Stdin)
-
-	fmt.Println("BitTorrent Client CLI")
-	fmt.Println("-----------------------------")
-	fmt.Println()
-	fmt.Println("Type 'help' for valid commands")
-
+	torrentClient := client.Client{}
+	exited := false
 	for !exited {
-		fmt.Println()
-		fmt.Print("Enter command: ")
-
 		scanner.Scan()
-		input = scanner.Text()
-
-		if input == "exit" {
-			exited = true
+		input := strings.Fields(scanner.Text())
+		if len(input) == 0 {
 			continue
 		}
 
-		inputArgs = strings.Fields(input)
-		command = inputArgs[0]
-
-		switch command {
-		case "help":
-			fmt.Println("help: prints valid commands")
-			fmt.Println("exit: exits program")
-			fmt.Println("print: prints all torrents")
-			fmt.Println("add <file path>: adds torrent from <file path>")
-			fmt.Println("remove <id>: remove torrent with id <id>")
+		cmd := input[0]
+		switch cmd {
 		case "exit":
 			exited = true
+		case "help":
+			printHelp()
 		case "print":
 			torrentClient.ShowTorrents()
 		case "add":
-			if len(inputArgs) != 2 {
-				log.Println(errors.New("not enough input arguments to add torrent"))
-				fmt.Println("Not enough input arguments supplied to add torrent")
+			if len(input) != 2 {
+				fmt.Print("not enough input arguments")
 				continue
 			}
 
-			err = torrentClient.AddTorrent(inputArgs[1])
+			err := torrentClient.AddTorrent(input[1])
 			if err != nil {
-				log.Println(err)
 				fmt.Println(err)
 			}
 		case "remove":
-			if len(inputArgs) != 2 {
-				log.Println(errors.New("not enough input arguments to remove torrent"))
-				fmt.Println("Id not supplied to remove torrent")
+			if len(input) != 2 {
+				fmt.Print("not enough input arguments")
 				continue
 			}
 
-			id, err := strconv.Atoi(inputArgs[1])
+			err := torrentClient.RemoveTorrent(input[1])
 			if err != nil {
-				log.Println(err)
-				fmt.Println("Id supplied is not a valid integer")
-				continue
-			}
-
-			err = torrentClient.RemoveTorrent(id)
-			if err != nil {
-				log.Println(err)
 				fmt.Println(err)
 			}
 		}
+
+		fmt.Println()
 	}
+}
+
+func main() {
+	f := initializeLogger()
+	defer f.Close()
+
+	runClient()
 }

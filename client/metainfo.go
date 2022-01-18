@@ -2,275 +2,86 @@ package client
 
 import (
 	"crypto/sha1"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
-	"fmt"
-	"log"
-	"net/url"
-	"strings"
-	"time"
+	"io"
+	"reflect"
 
 	"github.com/marksamman/bencode"
 )
 
-type metadata struct {
-	comment      string
-	createdBy    string
-	creationDate string
-	// encoding
-}
-
+// Some of the following fields don't make sense, but the goal with these
+// structs is to store data directly from the decoded torrent file stream.
+// Thus, this represents the structure of that stream.
 type file struct {
-	length int64
-	path   string
-	// md5sum (multiple file mode)
+	Length int64    `json:"length"`
+	Path   []string `json:"path"`
 }
 
 type info struct {
-	name             string
+	Files            []file `json:"files"`
 	hasMultipleFiles bool
-	pieceLength      int64
-	pieces           [][]byte
-	length           int64  // single file mode
-	files            []file // multiple file mode
-	// private
-	// md5sum (single file mode)
-}
-
-type infoHash struct {
-	hexString        string
-	urlEncodedString string
+	Length           int64  `json:"length"`
+	Name             string `json:"name"`
+	PieceLength      int64  `json:"piece length"`
+	Pieces           string `json:"pieces"`
 }
 
 type metainfo struct {
-	announce     string
-	announceList []string
-	metadata     metadata
-	info         info
-	infoHash     infoHash
+	Announce     string     `json:"announce"`
+	AnnounceList [][]string `json:"announce-list"`
+	Comment      string     `json:"comment"`
+	CreatedBy    string     `json:"created by"`
+	CreationDate int64      `json:"creation date"`
+	Info         info       `json:"info"`
+	infoHash     [20]byte
 }
 
-func extractAnnounceFromDecodedStream(decodedStream map[string]interface{}) (string, error) {
-	announce, announceExists := decodedStream["announce"]
-	if !announceExists {
-		return "", errors.New("announce not found in decoded file contents")
+func (m metainfo) checkFieldsPostUnmarshal() error {
+	if m.Announce == "" && m.AnnounceList == nil {
+		return errors.New("no url in metainfo to announce to")
+	} else if reflect.DeepEqual(m.Info, info{}) {
+		return errors.New("no info in metainfo")
+	} else if m.Info.Name == "" {
+		return errors.New("no name field in metainfo info")
+	} else if m.Info.PieceLength == 0 || m.Info.Pieces == "" {
+		return errors.New("no piece info in metainfo info")
+	} else if len(m.Info.Files) == 0 && m.Info.Length == 0 {
+		return errors.New("neither files nor length exists in metainfo info")
 	}
 
-	return announce.(string), nil
+	return nil
 }
 
-func extractAnnounceListFromDecodedStream(decodedStream map[string]interface{}) []string {
-	announceListInterface, announceListExists := decodedStream["announce-list"]
-	if !announceListExists {
-		return nil
-	}
-
-	announceList := make([]string, 0)
-	for _, urls := range announceListInterface.([]interface{}) {
-		url := urls.([]interface{})[0].(string)
-		announceList = append(announceList, url)
-	}
-
-	return announceList
+func (m *metainfo) setRemainingFields(d map[string]interface{}) {
+	m.infoHash = sha1.Sum(bencode.Encode(
+		d["info"].(map[string]interface{}),
+	))
+	m.Info.hasMultipleFiles = len(m.Info.Files) != 0
 }
 
-func extractCommentFromDecodedStream(decodedStream map[string]interface{}) string {
-	commentInterface, commentExists := decodedStream["comment"]
-	if !commentExists {
-		return ""
-	}
-
-	return commentInterface.(string)
-}
-
-func extractCreatedByFromDecodedStream(decodedStream map[string]interface{}) string {
-	createdByInterface, createdByExists := decodedStream["created by"]
-	if !createdByExists {
-		return ""
-	}
-
-	return createdByInterface.(string)
-}
-
-func extractCreationDateFromDecodedStream(decodedStream map[string]interface{}) string {
-	creationDateInterface, creationDateExists := decodedStream["creation date"]
-	if !creationDateExists {
-		// Creation date is a mandatory key, but since it isn't critical to
-		// the operation of this client, it is just logged and omitted.
-		log.Println("Creation date not found in decoded file contents.")
-		return ""
-	}
-
-	creationDate := time.Unix(creationDateInterface.(int64), 0).String()
-	return creationDate
-}
-
-func createMetadata(decodedStream map[string]interface{}) metadata {
-	return metadata{
-		comment:      extractCommentFromDecodedStream(decodedStream),
-		createdBy:    extractCreatedByFromDecodedStream(decodedStream),
-		creationDate: extractCreationDateFromDecodedStream(decodedStream),
-	}
-}
-
-func extractNameFromInfoDictInterface(infoDictInterface map[string]interface{}) (string, error) {
-	nameInterface, nameExists := infoDictInterface["name"]
-	if !nameExists {
-		return "", errors.New("name not found in info dict of decoded file contents")
-	}
-
-	name := nameInterface.(string)
-	return name, nil
-}
-
-func extractHasMultipleFilesFromInfoDictInterface(infoDictInterface map[string]interface{}) (bool, error) {
-	_, filesExist := infoDictInterface["files"]
-	_, lengthExists := infoDictInterface["length"]
-
-	// Check if files !XOR length exists in info dict
-	if filesExist == lengthExists {
-		return false, fmt.Errorf("both files and length exist or do not exist -> value: %t", filesExist)
-	}
-
-	hasMultipleFiles := filesExist
-	return hasMultipleFiles, nil
-}
-
-func extractPieceLengthFromInfoDictInterface(infoDictInterface map[string]interface{}) (int64, error) {
-	pieceLengthInterface, pieceLengthExists := infoDictInterface["piece length"]
-	if !pieceLengthExists {
-		return 0, errors.New("piece length not found in info dict of decoded file contents")
-	}
-
-	pieceLength := pieceLengthInterface.(int64)
-	return pieceLength, nil
-}
-
-func extractPiecesFromInfoDictInterface(infoDictInterface map[string]interface{}) ([][]byte, error) {
-	piecesInterface, piecesExists := infoDictInterface["pieces"]
-	if !piecesExists {
-		return nil, errors.New("pieces not found in info dict of decoded file contents")
-	}
-
-	piecesBytes := []byte(piecesInterface.(string))
-	hashLength := 20
-	pieces := make([][]byte, 0)
-	for i := 0; i < len(piecesBytes); i += hashLength {
-		pieces = append(pieces, piecesBytes[i:i+hashLength])
-	}
-
-	return pieces, nil
-}
-
-func extractLengthFromInfoDictInterface(infoDictInterface map[string]interface{}) int64 {
-	lengthInterface, lengthExists := infoDictInterface["length"]
-	if !lengthExists {
-		return 0
-	}
-
-	length := lengthInterface.(int64)
-	return length
-}
-
-func extractFilesFromInfoDictInterface(infoDictInterface map[string]interface{}) []file {
-	filesInterface, filesExist := infoDictInterface["files"]
-	if !filesExist {
-		return nil
-	}
-
-	files := make([]file, 0)
-	for _, fileInterface := range filesInterface.([]interface{}) {
-		fileDict := fileInterface.(map[string]interface{})
-		pathInterface := fileDict["path"].([]interface{})
-		pathParts := make([]string, 0)
-		for _, pathPart := range pathInterface {
-			pathParts = append(pathParts, pathPart.(string))
-		}
-
-		file := file{
-			length: fileDict["length"].(int64),
-			path:   strings.Join(pathParts, "/"),
-		}
-		files = append(files, file)
-	}
-
-	return files
-}
-
-func createInfo(decodedStream map[string]interface{}) (*info, error) {
-	infoDictInterface, infoExists := decodedStream["info"]
-	if !infoExists {
-		return nil, errors.New("info not found in decoded file contents")
-	}
-
-	infoDict := infoDictInterface.(map[string]interface{})
-	name, err := extractNameFromInfoDictInterface(infoDict)
+func newMetainfo(r io.Reader) (*metainfo, error) {
+	decodedStream, err := bencode.Decode(r)
 	if err != nil {
 		return nil, err
 	}
 
-	hasMultipleFiles, err := extractHasMultipleFilesFromInfoDictInterface(infoDict)
+	bytes, err := json.Marshal(decodedStream)
 	if err != nil {
 		return nil, err
 	}
 
-	pieceLength, err := extractPieceLengthFromInfoDictInterface(infoDict)
+	m := metainfo{}
+	err = json.Unmarshal(bytes, &m)
 	if err != nil {
 		return nil, err
 	}
 
-	pieces, err := extractPiecesFromInfoDictInterface(infoDict)
+	err = m.checkFieldsPostUnmarshal()
 	if err != nil {
 		return nil, err
 	}
+	m.setRemainingFields(decodedStream)
 
-	length := extractLengthFromInfoDictInterface(infoDict)
-	files := extractFilesFromInfoDictInterface(infoDict)
-
-	return &info{
-		name:             name,
-		hasMultipleFiles: hasMultipleFiles,
-		pieceLength:      pieceLength,
-		pieces:           pieces,
-		length:           length,
-		files:            files,
-	}, nil
-}
-
-func convertInfoToInfoHash(infoDictInterface map[string]interface{}) infoHash {
-	encodedInfoDict := bencode.Encode(infoDictInterface)
-	encryptedInfoDict := sha1.Sum(encodedInfoDict)
-	infoHash := infoHash{
-		hexString:        hex.EncodeToString(encryptedInfoDict[:]),
-		urlEncodedString: url.QueryEscape(string(encryptedInfoDict[:])),
-	}
-
-	return infoHash
-}
-
-func extractMetainfoFromDecodedStream(decodedStream map[string]interface{}) (*metainfo, error) {
-	announce, err := extractAnnounceFromDecodedStream(decodedStream)
-	if err != nil {
-		return nil, err
-	}
-
-	announceList := extractAnnounceListFromDecodedStream(decodedStream)
-	metadata := createMetadata(decodedStream)
-
-	info, err := createInfo(decodedStream)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we can create an info instance, then we know that the info key
-	// exists in the file contents, so we use that directly
-	infoHash := convertInfoToInfoHash(decodedStream["info"].(map[string]interface{}))
-
-	return &metainfo{
-		announce:     announce,
-		announceList: announceList,
-		metadata:     metadata,
-		info:         *info,
-		infoHash:     infoHash,
-	}, nil
+	return &m, nil
 }

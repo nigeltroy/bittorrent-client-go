@@ -1,112 +1,37 @@
 package client
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
+	"log"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/marksamman/bencode"
 )
 
-type peerDict struct {
-	peerId string
-	ip     string
-	port   int64
-}
-
-type request struct {
-	announce   string
-	infoHash   string
-	peerId     string
-	uploaded   int64
-	downloaded int64
-	left       int64
-	// compact
-	// ip
-	// port
-	// noPeerId
-	// event
-	// numwant
-	// key
-	// trackerid
-}
-
-type response struct {
-	failureReason string
-	interval      int64
-	peersDict     []peerDict // dictionary model
-	// peersBinary   string     // binary model
-	// warningMessage
-	// minInterval
-	// trackerId
-	// complete
-	// incomplete
-}
-
 type tracker struct {
-	request  request
-	response response
+	interval int64
+	url      string
 }
 
-func (t *torrent) createRequest(announce string, uploaded int64, downloaded int64) (*request, error) {
-	hasMultipleFiles := t.metainfo.info.hasMultipleFiles
-	var length int64
-
-	if hasMultipleFiles {
-		length = 0
-		for _, file := range t.metainfo.info.files {
-			length += file.length
-		}
-	} else {
-		length = t.metainfo.info.length
+func tryToAnnounce(url string, t *torrent) ([]peer, error) {
+	if strings.HasPrefix(url, "udp") || strings.HasPrefix(url, "dht") {
+		return nil, errors.New("no support for UDP/DHT")
 	}
 
-	if length == 0 {
-		return nil, errors.New("length has not been set or is equal to zero")
-	}
-
-	peerId := "-NG0001-"
-	for i := 0; i < 12; i++ {
-		peerId += strconv.Itoa(rand.Intn(10))
-	}
-
-	return &request{
-		announce:   announce,
-		infoHash:   t.metainfo.infoHash.urlEncodedString,
-		peerId:     peerId,
-		uploaded:   uploaded,
-		downloaded: downloaded,
-		left:       length - downloaded,
-	}, nil
-}
-
-func (r *request) getTrackerResponse() (*response, error) {
-	requestUrl := fmt.Sprintf(
-		"%s?info_hash=%s&peer_id=%s&uploaded=%d&downloaded=%d&left=%d",
-		r.announce,
-		r.infoHash,
-		url.QueryEscape(r.peerId),
-		r.uploaded,
-		r.downloaded,
-		r.left,
-	)
-
-	if strings.HasPrefix(r.announce, "udp://") {
-		return nil, errors.New("cannot perform UDP connection requests")
-	}
-
-	httpClient := http.Client{
+	client := http.Client{
+		// Arbitrary but existent timeout duration
 		Timeout: 5 * time.Second,
 	}
-	resp, err := httpClient.Get(requestUrl)
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	decodedResp, err := bencode.Decode(resp.Body)
 	if err != nil {
@@ -115,70 +40,69 @@ func (r *request) getTrackerResponse() (*response, error) {
 
 	failureReason, requestFailed := decodedResp["failure reason"].(string)
 	if requestFailed {
-		return &response{
-			failureReason: failureReason,
-		}, nil
+		return nil, fmt.Errorf("request failed with reason: %s", failureReason)
 	}
 
-	interval := decodedResp["interval"].(int64)
-
-	peersInterface, peersIsArray := decodedResp["peers"].([]interface{})
-	if !peersIsArray {
-		return nil, errors.New("cannot process binary model peers")
+	tracker := tracker{
+		interval: decodedResp["interval"].(int64),
+		url:      url,
 	}
+	t.trackers = append(t.trackers, tracker)
 
-	peers := make([]peerDict, 0)
-	for _, p := range peersInterface {
-		peerInterface := p.(map[string]interface{})
-		peerId, _ := peerInterface["peer id"].(string)
-		peer := peerDict{
-			peerId: peerId,
-			ip:     peerInterface["ip"].(string),
-			port:   peerInterface["port"].(int64),
+	peers := make([]peer, 0)
+	for _, p := range decodedResp["peers"].([]interface{}) {
+		bytes, err := json.Marshal(p)
+		if err != nil {
+			return nil, err
+		}
+
+		peerConnection := peerConnection{}
+		err = json.Unmarshal(bytes, &peerConnection)
+		if err != nil {
+			return nil, err
+		}
+
+		// Instantiate peer that is, by default, choked and not interested
+		peer := peer{
+			choked:     true,
+			connection: peerConnection,
+			interested: false,
 		}
 		peers = append(peers, peer)
 	}
 
-	return &response{
-		interval:  interval,
-		peersDict: peers,
-	}, nil
+	return peers, nil
 }
 
-func (t *torrent) tryToAnnounce() (*tracker, error) {
-	// Need to clean this function up. Make this async too!
-	var couldAnnounce bool
-
-	// Try announcing to the main announce URL first
-	request, err := t.createRequest(t.metainfo.announce, 0, 0)
-	if err != nil {
-		return nil, err
+func (t *torrent) requestPeers() error {
+	announceUrls := make([]string, 0)
+	announceUrls = append(announceUrls, t.metainfo.Announce)
+	for _, url := range t.metainfo.AnnounceList {
+		announceUrls = append(announceUrls, url...)
 	}
 
-	response, err := request.getTrackerResponse()
-	if err != nil {
-		// Main announce URL failed, try announcing to other URLs
-		for _, url := range t.metainfo.announceList {
-			request, err = t.createRequest(url, 0, 0)
-			if err != nil {
-				return nil, err
-			}
-
-			response, err = request.getTrackerResponse()
-			if response != nil {
-				couldAnnounce = true
-				break
-			}
+	allPeers := make([]peer, 0)
+	for _, u := range announceUrls {
+		requestUrl := fmt.Sprintf(
+			"%s?info_hash=%s&peer_id=%s&uploaded=%d&downloaded=%d&left=%d",
+			u,
+			url.QueryEscape(string(t.metainfo.infoHash[:])),
+			url.QueryEscape(string(t.id)),
+			0,
+			0,
+			t.metainfo.Info.Length,
+		)
+		peers, err := tryToAnnounce(requestUrl, t)
+		if err != nil {
+			// Since we just continue here, log the error
+			log.Println(err)
+			continue
 		}
-	} else {
-		couldAnnounce = true
+		allPeers = append(allPeers, peers...)
 	}
 
-	if couldAnnounce {
-		return &tracker{
-			request:  *request,
-			response: *response,
-		}, nil
+	if len(allPeers) == 0 {
+		return errors.New("no peers found after announcing to all urls")
 	}
-	return nil, err
+	return nil
 }

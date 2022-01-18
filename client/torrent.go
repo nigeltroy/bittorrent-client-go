@@ -1,90 +1,89 @@
 package client
 
 import (
-	"errors"
+	"fmt"
 	"io"
-	"log"
-
-	"github.com/marksamman/bencode"
+	"math/rand"
+	"os"
+	"strconv"
 )
 
-type state int
+type inputType int
 
 const (
-	started state = iota
-	stopped
-	completed
+	// Just add support for file paths for now
+	path inputType = iota
+	// url
+	// info hash
+	// magnet link
+	invalid
 )
 
 type torrent struct {
-	id       int
-	state    state
+	// torrents are considered clients here, so this is the peer id
+	id       []byte
 	metainfo metainfo
-	tracker  tracker
+	trackers []tracker
 	peers    []peer
 }
 
-func (t *torrent) setMetainfo(r io.Reader) error {
-	decodedStream, err := bencode.Decode(r)
-	if err != nil {
-		return err
+func interpretInput(input string) inputType {
+	_, err := os.Open(input)
+	if err == nil {
+		return path
 	}
 
-	metainfo, err := extractMetainfoFromDecodedStream(decodedStream)
-	if err != nil {
-		return err
-	}
-
-	t.metainfo = *metainfo
-
-	return nil
+	return invalid
 }
 
-func (t *torrent) setTracker() error {
-	tracker, err := t.tryToAnnounce()
-	if err != nil {
-		return err
-	}
-
-	t.tracker = *tracker
-	return nil
-}
-
-func (t *torrent) setPeers() error {
-	return nil
-}
-
-func createTorrent(id int, r io.Reader, torrents []torrent) (*torrent, error) {
-	log.Println("Creating torrent...")
-
-	torrent := torrent{
-		id:    id,
-		state: stopped,
-	}
-
-	err := torrent.setMetainfo(r)
+func createTorrentFromFileContents(path string) (*torrent, error) {
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Successfully set metainfo")
 
-	for _, t := range torrents {
-		if t.metainfo.info.name == torrent.metainfo.info.name {
-			return nil, errors.New("torrent already exists in client")
+	r := io.Reader(f)
+	m, err := newMetainfo(r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &torrent{metainfo: *m}, err
+}
+
+func createId() []byte {
+	// Azureus style with arbitrary client id and version number
+	base := []byte("-GG0001-")
+	randSuffix := make([]byte, 0)
+	for i := 0; i < 12; i++ {
+		bytes := []byte(strconv.Itoa(rand.Intn(10)))
+		randSuffix = append(randSuffix, bytes[0])
+	}
+
+	id := append(base, randSuffix...)
+	return id
+}
+
+func newTorrent(input string) (*torrent, error) {
+	var t *torrent
+	var err error
+
+	inputType := interpretInput(input)
+	switch inputType {
+	case path:
+		t, err = createTorrentFromFileContents(input)
+		if err != nil {
+			return nil, err
 		}
+	case invalid:
+		return nil, fmt.Errorf("input %s is invalid", input)
 	}
 
-	err = torrent.setTracker()
+	t.id = createId()
+	err = t.requestPeers()
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Successfully set tracker")
 
-	err = torrent.setPeers()
-	if err != nil {
-		return nil, err
-	}
-	log.Println("Successfully set peers")
-
-	return &torrent, nil
+	return t, nil
 }
