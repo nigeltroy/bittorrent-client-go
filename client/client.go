@@ -34,6 +34,7 @@ func (c *Client) AddTorrent(input string) error {
 	}
 
 	c.Torrents[newName] = *torrent
+	c.StartTorrent(newName)
 	return nil
 }
 
@@ -41,12 +42,21 @@ func (c *Client) RemoveTorrent(prefix string) error {
 	for name := range c.Torrents {
 		if strings.HasPrefix(name, prefix) {
 			fmt.Printf("Removed torrent %s\n", name)
+			c.StopTorrent(name)
 			delete(c.Torrents, name)
 			return nil
 		}
 	}
 
 	return fmt.Errorf("no torrent matches prefix %s", prefix)
+}
+
+func (c *Client) StartTorrent(prefix string) error {
+	return nil
+}
+
+func (c *Client) StopTorrent(prefix string) error {
+	return nil
 }
 
 func (c Client) ShowTorrents() {

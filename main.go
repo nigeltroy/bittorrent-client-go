@@ -69,6 +69,10 @@ func runClient() {
 			runClientCrudCommand(input, torrentClient.AddTorrent)
 		case "remove":
 			runClientCrudCommand(input, torrentClient.RemoveTorrent)
+		case "start":
+			runClientCrudCommand(input, torrentClient.StartTorrent)
+		case "stop":
+			runClientCrudCommand(input, torrentClient.StopTorrent)
 		}
 
 		fmt.Println()
