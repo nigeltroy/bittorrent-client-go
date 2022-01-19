@@ -5,7 +5,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"strconv"
 )
 
 type inputType int
@@ -51,17 +50,17 @@ func createTorrentFromFileContents(path string) (*torrent, error) {
 	return &torrent{metainfo: *m}, err
 }
 
-func createId() []byte {
+func createId() ([]byte, error) {
 	// Azureus style with arbitrary client id and version number
 	base := []byte("-GG0001-")
-	randSuffix := make([]byte, 0)
-	for i := 0; i < 12; i++ {
-		bytes := []byte(strconv.Itoa(rand.Intn(10)))
-		randSuffix = append(randSuffix, bytes[0])
+	randSuffix := make([]byte, 12)
+	_, err := rand.Read(randSuffix)
+	if err != nil {
+		return nil, err
 	}
 
 	id := append(base, randSuffix...)
-	return id
+	return id, nil
 }
 
 func newTorrent(input string) (*torrent, error) {
@@ -79,8 +78,17 @@ func newTorrent(input string) (*torrent, error) {
 		return nil, fmt.Errorf("input %s is invalid", input)
 	}
 
-	t.id = createId()
+	t.id, err = createId()
+	if err != nil {
+		return nil, err
+	}
+
 	err = t.requestPeers()
+	if err != nil {
+		return nil, err
+	}
+
+	err = t.handshake()
 	if err != nil {
 		return nil, err
 	}

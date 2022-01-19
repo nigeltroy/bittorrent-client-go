@@ -16,7 +16,7 @@ An actual fully-featured BitTorrent client is a huge undertaking (see FOSS proje
         - [ ] URL
         - [x] File
         - [ ] Info hash/Magnet link
-    - [ ] Tracker
+    - [x] Tracker
     - [ ] Peers
     - [ ] Client
 
@@ -51,6 +51,7 @@ Information on the following fields can be found in the [BitTorrent protocol spe
 - [ ] UDP announce
 - [ ] DHT announce
 - [ ] Async announcing
+- [ ] Reannouncing every <Response.interval> seconds
 
 ##### Request
 - [x] info_hash
@@ -83,3 +84,4 @@ Information on the following fields can be found in the [BitTorrent protocol spe
     - [ ] Binary model
 
 #### Peers
+- [x] Handshake
