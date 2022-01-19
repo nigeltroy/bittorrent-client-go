@@ -15,7 +15,7 @@ type peerConnection struct {
 
 type peer struct {
 	choked     bool
-	connected  bool
+	available  bool
 	connection peerConnection
 	interested bool
 }
@@ -84,7 +84,7 @@ func (t *torrent) handshake() error {
 			// Since we could complete the handshake, set the peer ID and
 			// connected fields
 			t.peers[idx].connection.Id = string(peerHandshake[l-20 : l-1])
-			t.peers[idx].connected = true
+			t.peers[idx].available = true
 		}(i)
 	}
 

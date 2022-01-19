@@ -71,7 +71,7 @@ func tryToAnnounce(url string, t *torrent) ([]peer, error) {
 		// Instantiate peer that is, by default, choked and not interested
 		peer := peer{
 			choked:     true,
-			connected:  false,
+			available:  false,
 			connection: peerConnection,
 			interested: false,
 		}
