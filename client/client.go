@@ -19,11 +19,11 @@ func New() Client {
 }
 
 func (c *Client) AddTorrent(input string) error {
-	torrent, err := newTorrent(input)
+	t, err := newTorrent(input)
 	if err != nil {
 		return err
 	}
-	newName := torrent.metainfo.Info.Name
+	newName := t.metainfo.Info.Name
 
 	// Later, to make this more efficient, do the following check immediately
 	// after setting the metainfo
@@ -33,7 +33,7 @@ func (c *Client) AddTorrent(input string) error {
 		}
 	}
 
-	c.Torrents[newName] = *torrent
+	c.Torrents[newName] = *t
 	c.StartTorrent(newName)
 	return nil
 }

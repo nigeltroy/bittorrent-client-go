@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+type message int
+
+const (
+	choke int = iota
+	unchoke
+)
+
 type peerConnection struct {
 	Id   string `json:"peer id"`
 	Ip   string `json:"ip"`
@@ -18,6 +25,37 @@ type peer struct {
 	available  bool
 	connection peerConnection
 	interested bool
+}
+
+func createHandshake(infoHash string, id []byte) string {
+	base := fmt.Sprintf(
+		"%s%s%s",
+		"\023",
+		"BitTorrent protocol",
+		"\000\000\000\000\000\000\000\000",
+	)
+	handshake := fmt.Sprintf("%s%s%s", base, infoHash, id)
+	return handshake
+}
+
+// Handshake + unchoking + intersted
+func (t *torrent) connectToPeers() error {
+	var wg sync.WaitGroup
+	clientHandshake := createHandshake(string(t.metainfo.infoHash[:]), t.id)
+
+	// Int for loop because ranges produce copies, and we want to mutate t
+	for i := 0; i < len(t.peers); i++ {
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+			t.handshake()
+			t.makePeerUnchokedAndInterested()
+		}(i)
+	}
+
+	wg.Wait()
+	return nil
 }
 
 func (t *torrent) handshake() error {
@@ -89,5 +127,10 @@ func (t *torrent) handshake() error {
 	}
 
 	wg.Wait()
+	return nil
+}
+
+func (t *torrent) download() error {
+
 	return nil
 }

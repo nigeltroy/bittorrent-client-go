@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -11,9 +10,7 @@ import (
 )
 
 func initializeLogger() *os.File {
-	const logFileName string = "logs.txt"
-
-	f, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY, 0666)
+	f, err := os.OpenFile("logs.txt", os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,11 +45,12 @@ func runClient() {
 	fmt.Println("Type 'help' for valid commands")
 	fmt.Println()
 
-	scanner := bufio.NewScanner(os.Stdin)
-	torrentClient := client.New()
+	// scanner := bufio.NewScanner(os.Stdin)
+	c := client.New()
 	for {
-		scanner.Scan()
-		input := strings.Fields(scanner.Text())
+		// scanner.Scan()
+		// input := strings.Fields(scanner.Text())
+		input := strings.Fields("add examples/d.torrent")
 		if len(input) == 0 {
 			continue
 		}
@@ -64,24 +62,24 @@ func runClient() {
 		case "help":
 			printHelp()
 		case "print":
-			torrentClient.ShowTorrents()
+			c.ShowTorrents()
 		case "add":
-			runClientCrudCommand(input, torrentClient.AddTorrent)
+			runClientCrudCommand(input, c.AddTorrent)
 		case "remove":
-			runClientCrudCommand(input, torrentClient.RemoveTorrent)
+			runClientCrudCommand(input, c.RemoveTorrent)
 		case "start":
-			runClientCrudCommand(input, torrentClient.StartTorrent)
+			runClientCrudCommand(input, c.StartTorrent)
 		case "stop":
-			runClientCrudCommand(input, torrentClient.StopTorrent)
+			runClientCrudCommand(input, c.StopTorrent)
 		}
 
 		fmt.Println()
+		break
 	}
 }
 
 func main() {
 	f := initializeLogger()
 	defer f.Close()
-
 	runClient()
 }
